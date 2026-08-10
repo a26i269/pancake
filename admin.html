@@ -18,10 +18,26 @@
       font-size: 32px;
     }
 
+    .label {
+      font-size: 18px;
+      margin-top: 25px;
+    }
+
     #currentNumber {
       font-size: 60px;
       font-weight: bold;
-      margin: 30px;
+      margin: 20px;
+    }
+
+    #issuedNumber {
+      font-size: 30px;
+      font-weight: bold;
+      margin: 10px;
+    }
+
+    #statusText {
+      font-size: 20px;
+      margin: 20px;
     }
 
     button {
@@ -29,6 +45,11 @@
       padding: 15px 35px;
       margin: 10px;
       cursor: pointer;
+    }
+
+    button:disabled {
+      cursor: default;
+      opacity: 0.5;
     }
 
     #resetButton {
@@ -42,10 +63,26 @@
 
   <h1>🥞 店員用 管理画面</h1>
 
-  <p>現在呼び出し中</p>
+
+  <div class="label">
+    現在呼び出し中
+  </div>
 
   <div id="currentNumber">
     A000
+  </div>
+
+
+  <div class="label">
+    現在の最終発行番号
+  </div>
+
+  <div id="issuedNumber">
+    A000
+  </div>
+
+
+  <div id="statusText">
   </div>
 
 
@@ -62,6 +99,10 @@
 
   <script type="module">
 
+    // ==========================================
+    // Firebase
+    // ==========================================
+
     import { initializeApp }
       from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
 
@@ -70,7 +111,8 @@
       ref,
       onValue,
       runTransaction,
-      set
+      get,
+      update
     }
       from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
 
@@ -107,8 +149,18 @@
       getDatabase(app);
 
 
+    // ==========================================
+    // HTML要素
+    // ==========================================
+
     const currentDisplay =
       document.getElementById("currentNumber");
+
+    const issuedDisplay =
+      document.getElementById("issuedNumber");
+
+    const statusText =
+      document.getElementById("statusText");
 
     const nextButton =
       document.getElementById("nextButton");
@@ -116,6 +168,10 @@
     const resetButton =
       document.getElementById("resetButton");
 
+
+    // ==========================================
+    // Firebase参照
+    // ==========================================
 
     const currentRef =
       ref(database, "currentNumber");
@@ -126,21 +182,120 @@
     const sessionRef =
       ref(database, "sessionId");
 
+    const rootRef =
+      ref(database);
+
 
     // ==========================================
-    // 現在呼び出し中の番号を表示
+    // 現在の状態
+    // ==========================================
+
+    let currentNumber = 0;
+
+    let ticketCounter = 0;
+
+
+    // ==========================================
+    // A001形式に変換する関数
+    // ==========================================
+
+    function formatTicket(number) {
+
+      return (
+        "A" +
+        String(number).padStart(3, "0")
+      );
+
+    }
+
+
+    // ==========================================
+    // ボタン・状態表示を更新
+    // ==========================================
+
+    function updateStatus() {
+
+      // 発行された整理券がない
+      if (ticketCounter === 0) {
+
+        statusText.textContent =
+          "現在、待っているお客様はいません";
+
+        nextButton.disabled = true;
+
+        return;
+
+      }
+
+
+      // 全員呼び出し済み
+      if (currentNumber >= ticketCounter) {
+
+        statusText.textContent =
+          "発行済みの整理券はすべて呼び出しました";
+
+        nextButton.disabled = true;
+
+        return;
+
+      }
+
+
+      // 呼び出せる人がいる
+      const waiting =
+        ticketCounter - currentNumber;
+
+
+      statusText.textContent =
+        "呼び出し待ち：" +
+        waiting +
+        "組";
+
+
+      nextButton.disabled = false;
+
+    }
+
+
+    // ==========================================
+    // 現在呼び出し番号を監視
     // ==========================================
 
     onValue(
       currentRef,
       (snapshot) => {
 
-        const number =
+        currentNumber =
           snapshot.val() || 0;
 
+
         currentDisplay.textContent =
-          "A" +
-          String(number).padStart(3, "0");
+          formatTicket(currentNumber);
+
+
+        updateStatus();
+
+      }
+    );
+
+
+    // ==========================================
+    // 発行済み番号を監視
+    // ==========================================
+
+    onValue(
+      counterRef,
+      (snapshot) => {
+
+        ticketCounter =
+          snapshot.val() || 0;
+
+
+        issuedDisplay.textContent =
+          formatTicket(ticketCounter);
+
+
+        updateStatus();
 
       }
     );
@@ -156,24 +311,49 @@
 
         nextButton.disabled = true;
 
+
         try {
 
+          // 最新の発行番号をFirebaseから取得
+          const counterSnapshot =
+            await get(counterRef);
+
+
+          const latestCounter =
+            counterSnapshot.val() || 0;
+
+
+          // currentNumberを安全に更新
           await runTransaction(
             currentRef,
-            (currentNumber) => {
+            (current) => {
 
-              if (currentNumber === null) {
-                return 1;
+              const number =
+                current || 0;
+
+
+              // 発行済み番号まで到達していたら
+              // それ以上増やさない
+              if (
+                number >=
+                latestCounter
+              ) {
+
+                return number;
+
               }
 
-              return currentNumber + 1;
+
+              return number + 1;
 
             }
           );
 
+
         } catch (error) {
 
           console.error(error);
+
 
           alert(
             "番号の更新に失敗しました"
@@ -181,7 +361,8 @@
 
         }
 
-        nextButton.disabled = false;
+
+        updateStatus();
 
       }
     );
@@ -208,33 +389,37 @@
 
         resetButton.disabled = true;
 
+        nextButton.disabled = true;
+
 
         try {
 
-          // 次に発行する整理券をA001からにする
-          await set(
-            counterRef,
-            0
-          );
+          // 現在のsessionIdを取得
+          const sessionSnapshot =
+            await get(sessionRef);
 
 
-          // 呼び出し番号をA000に戻す
-          await set(
-            currentRef,
-            0
-          );
+          const currentSession =
+            sessionSnapshot.val() || 0;
 
 
-          // セッション番号を1増やす
-          await runTransaction(
-            sessionRef,
-            (session) => {
+          // --------------------------------------
+          // まとめて更新
+          // --------------------------------------
 
-              if (session === null) {
-                return 1;
-              }
+          await update(
+            rootRef,
+            {
 
-              return session + 1;
+              // 次の整理券をA001からにする
+              ticketCounter: 0,
+
+              // 呼び出し番号をA000へ
+              currentNumber: 0,
+
+              // 前の整理券を無効にする
+              sessionId:
+                currentSession + 1
 
             }
           );
@@ -249,6 +434,7 @@
 
           console.error(error);
 
+
           alert(
             "リセットに失敗しました"
           );
@@ -257,6 +443,8 @@
 
 
         resetButton.disabled = false;
+
+        updateStatus();
 
       }
     );
