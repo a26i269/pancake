@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>パンケーキ整理券 管理画面</title>
+
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding: 50px 20px;
+    }
+
+    h1 {
+      font-size: 32px;
+    }
+
+    #currentNumber {
+      font-size: 60px;
+      font-weight: bold;
+      margin: 30px;
+    }
+
+    button {
+      font-size: 22px;
+      padding: 15px 35px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>🥞 店員用 管理画面</h1>
+
+  <p>現在呼び出し中</p>
+
+  <div id="currentNumber">A000</div>
+
+  <button id="nextButton">
+    次の番号を呼ぶ
+  </button>
+
+
+  <script type="module">
+
+    import { initializeApp }
+      from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+
+    import {
+      getDatabase,
+      ref,
+      onValue,
+      runTransaction
+    }
+      from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+
+
+    const firebaseConfig = {
+
+      apiKey: "AIzaSyCGLGkUuNKPWxT9w0mmsLeCulITfBgYRCE",
+
+      authDomain: "pancake-ce940.firebaseapp.com",
+
+      databaseURL:
+        "https://pancake-ce940-default-rtdb.asia-southeast1.firebasedatabase.app",
+
+      projectId: "pancake-ce940",
+
+      storageBucket: "pancake-ce940.firebasestorage.app",
+
+      messagingSenderId: "953995426233",
+
+      appId: "1:953995426233:web:66d61ae6990de43c9b5e68"
+    };
+
+
+    const app = initializeApp(firebaseConfig);
+
+    const database = getDatabase(app);
+
+
+    const currentDisplay =
+      document.getElementById("currentNumber");
+
+    const nextButton =
+      document.getElementById("nextButton");
+
+
+    const currentRef =
+      ref(database, "currentNumber");
+
+
+    // Firebaseの番号が変わったら画面も変える
+    onValue(currentRef, (snapshot) => {
+
+      const number = snapshot.val() || 0;
+
+      currentDisplay.textContent =
+        "A" + String(number).padStart(3, "0");
+
+    });
+
+
+    // 次の番号を呼ぶ
+    nextButton.addEventListener("click", async () => {
+
+      nextButton.disabled = true;
+
+      try {
+
+        await runTransaction(
+          currentRef,
+          (currentNumber) => {
+
+            if (currentNumber === null) {
+              return 1;
+            }
+
+            return currentNumber + 1;
+
+          }
+        );
+
+      } catch (error) {
+
+        console.error(error);
+
+        alert("番号の更新に失敗しました");
+
+      }
+
+      nextButton.disabled = false;
+
+    });
+
+  </script>
+
+</body>
+</html>
