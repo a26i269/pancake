@@ -49,6 +49,11 @@
       font-size: 22px;
       padding: 15px 35px;
       cursor: pointer;
+      margin-top: 15px;
+    }
+
+    button:disabled {
+      cursor: default;
     }
   </style>
 </head>
@@ -57,6 +62,7 @@
 <body>
 
   <h1>🥞 パンケーキ整理券</h1>
+
 
   <div class="label">
     現在呼び出し中
@@ -76,11 +82,9 @@
   </div>
 
 
-  <div id="waitingText">
-  </div>
+  <div id="waitingText"></div>
 
-  <div id="waitingTime">
-  </div>
+  <div id="waitingTime"></div>
 
 
   <button id="ticketButton">
@@ -89,6 +93,10 @@
 
 
   <script type="module">
+
+    // ==========================================
+    // Firebase
+    // ==========================================
 
     import { initializeApp }
       from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
@@ -104,26 +112,39 @@
 
     const firebaseConfig = {
 
-      apiKey: "AIzaSyCGLGkUuNKPWxT9w0mmsLeCulITfBgYRCE",
+      apiKey:
+        "AIzaSyCGLGkUuNKPWxT9w0mmsLeCulITfBgYRCE",
 
-      authDomain: "pancake-ce940.firebaseapp.com",
+      authDomain:
+        "pancake-ce940.firebaseapp.com",
 
       databaseURL:
         "https://pancake-ce940-default-rtdb.asia-southeast1.firebasedatabase.app",
 
-      projectId: "pancake-ce940",
+      projectId:
+        "pancake-ce940",
 
-      storageBucket: "pancake-ce940.firebasestorage.app",
+      storageBucket:
+        "pancake-ce940.firebasestorage.app",
 
-      messagingSenderId: "953995426233",
+      messagingSenderId:
+        "953995426233",
 
-      appId: "1:953995426233:web:66d61ae6990de43c9b5e68"
+      appId:
+        "1:953995426233:web:66d61ae6990de43c9b5e68"
     };
 
 
-    const app = initializeApp(firebaseConfig);
-    const database = getDatabase(app);
+    const app =
+      initializeApp(firebaseConfig);
 
+    const database =
+      getDatabase(app);
+
+
+    // ==========================================
+    // HTMLの要素
+    // ==========================================
 
     const button =
       document.getElementById("ticketButton");
@@ -141,58 +162,131 @@
       document.getElementById("waitingTime");
 
 
+    // ==========================================
+    // 変数
+    // ==========================================
+
     let currentCallNumber = 0;
+
     let myTicketNumber = null;
 
 
-    // 1組あたりの目安時間
+    // 1組あたりの待ち時間の目安（3分）
     const minutesPerGroup = 3;
 
 
-    const savedTicket =
-      localStorage.getItem("pancakeTicket");
+    // ==========================================
+    // QRコードから来た場合だけリセット
+    //
+    // QRコードのURL：
+    // https://a26i269.github.io/pancake/?reset=1
+    // ==========================================
+
+    const params =
+      new URLSearchParams(window.location.search);
 
 
-    if (savedTicket) {
+    if (params.get("reset") === "1") {
 
-      ticketDisplay.textContent = savedTicket;
+      // このスマホに保存されている
+      // 前回の整理券を削除
+      localStorage.removeItem(
+        "pancakeTicket"
+      );
 
-      button.textContent =
-        "整理券は発行済みです";
 
-      button.disabled = true;
-
-      myTicketNumber =
-        Number(savedTicket.replace("A", ""));
+      // URLから ?reset=1 を消す
+      //
+      // これによって、
+      // QRから入った後にページを更新しても
+      // もう一度リセットされることを防ぐ
+      window.history.replaceState(
+        {},
+        "",
+        window.location.pathname
+      );
 
     }
 
 
+    // ==========================================
+    // 保存済みの整理券を確認
+    // ==========================================
+
+    const savedTicket =
+      localStorage.getItem(
+        "pancakeTicket"
+      );
+
+
+    if (savedTicket) {
+
+      // 保存されている番号を表示
+      ticketDisplay.textContent =
+        savedTicket;
+
+
+      // A005 → 5 のように数字だけ取り出す
+      myTicketNumber =
+        Number(
+          savedTicket.replace("A", "")
+        );
+
+
+      button.textContent =
+        "整理券は発行済みです";
+
+
+      button.disabled = true;
+
+    }
+
+
+    // ==========================================
+    // 現在呼び出し中の番号
+    // ==========================================
+
     const currentRef =
-      ref(database, "currentNumber");
+      ref(
+        database,
+        "currentNumber"
+      );
 
 
-    onValue(currentRef, (snapshot) => {
+    // Firebaseの番号が変わったら
+    // お客さんのスマホも自動更新
+    onValue(
+      currentRef,
+      (snapshot) => {
 
-      currentCallNumber =
-        snapshot.val() || 0;
+        currentCallNumber =
+          snapshot.val() || 0;
 
 
-      currentDisplay.textContent =
-        "A" +
-        String(currentCallNumber).padStart(3, "0");
+        currentDisplay.textContent =
+          "A" +
+          String(
+            currentCallNumber
+          ).padStart(3, "0");
 
 
-      updateWaitingInfo();
+        updateWaitingInfo();
 
-    });
+      }
+    );
 
+
+    // ==========================================
+    // 待ち組数・待ち時間
+    // ==========================================
 
     function updateWaitingInfo() {
 
+      // まだ整理券を持っていない場合
       if (myTicketNumber === null) {
 
         waitingText.textContent = "";
+
         waitingTime.textContent = "";
 
         return;
@@ -200,17 +294,25 @@
 
 
       const difference =
-        myTicketNumber - currentCallNumber;
+        myTicketNumber -
+        currentCallNumber;
 
+
+      // ------------------------------------------
+      // まだ自分の順番ではない
+      // ------------------------------------------
 
       if (difference > 0) {
 
         waitingText.textContent =
-          "あと" + difference + "組です";
+          "あと" +
+          difference +
+          "組です";
 
 
         const estimatedMinutes =
-          difference * minutesPerGroup;
+          difference *
+          minutesPerGroup;
 
 
         waitingTime.textContent =
@@ -218,20 +320,34 @@
           estimatedMinutes +
           "分";
 
+      }
 
-      } else if (difference === 0) {
+
+      // ------------------------------------------
+      // 自分の順番
+      // ------------------------------------------
+
+      else if (difference === 0) {
 
         waitingText.textContent =
           "あなたの順番です！";
 
+
         waitingTime.textContent =
           "店頭までお越しください";
 
+      }
 
-      } else {
+
+      // ------------------------------------------
+      // すでに呼び出し済み
+      // ------------------------------------------
+
+      else {
 
         waitingText.textContent =
           "呼び出し済みです";
+
 
         waitingTime.textContent = "";
 
@@ -240,71 +356,110 @@
     }
 
 
-    button.addEventListener("click", async () => {
+    // ==========================================
+    // 整理券を発行
+    // ==========================================
 
-      button.disabled = true;
+    button.addEventListener(
+      "click",
+      async () => {
 
-      const counterRef =
-        ref(database, "ticketCounter");
+        // 二重クリック防止
+        button.disabled = true;
 
 
-      try {
-
-        const result =
-          await runTransaction(
-            counterRef,
-            (currentNumber) => {
-
-              if (currentNumber === null) {
-                return 1;
-              }
-
-              return currentNumber + 1;
-
-            }
+        const counterRef =
+          ref(
+            database,
+            "ticketCounter"
           );
 
 
-        const number =
-          result.snapshot.val();
+        try {
+
+          // Firebaseの番号を1増やす
+          //
+          // 同時に複数人が押しても
+          // 同じ番号にならないよう
+          // Transactionを使用
+          const result =
+            await runTransaction(
+              counterRef,
+              (currentNumber) => {
+
+                if (
+                  currentNumber === null
+                ) {
+
+                  return 1;
+
+                }
 
 
-        const ticket =
-          "A" +
-          String(number).padStart(3, "0");
+                return (
+                  currentNumber + 1
+                );
+
+              }
+            );
 
 
-        ticketDisplay.textContent =
-          ticket;
+          const number =
+            result.snapshot.val();
 
 
-        localStorage.setItem(
-          "pancakeTicket",
-          ticket
-        );
+          // 例：
+          // 1 → A001
+          // 12 → A012
+          const ticket =
+            "A" +
+            String(
+              number
+            ).padStart(3, "0");
 
 
-        myTicketNumber = number;
+          // 整理券番号を画面に表示
+          ticketDisplay.textContent =
+            ticket;
 
 
-        button.textContent =
-          "整理券は発行済みです";
+          // ======================================
+          // このスマホに整理券を保存
+          // ======================================
+
+          localStorage.setItem(
+            "pancakeTicket",
+            ticket
+          );
 
 
-        updateWaitingInfo();
+          myTicketNumber =
+            number;
 
 
-      } catch (error) {
+          button.textContent =
+            "整理券は発行済みです";
 
-        console.error(error);
 
-        alert("整理券の発行に失敗しました");
+          updateWaitingInfo();
 
-        button.disabled = false;
+
+        } catch (error) {
+
+          console.error(error);
+
+
+          alert(
+            "整理券の発行に失敗しました"
+          );
+
+
+          button.disabled = false;
+
+        }
 
       }
-
-    });
+    );
 
   </script>
 

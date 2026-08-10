@@ -27,10 +27,16 @@
     button {
       font-size: 22px;
       padding: 15px 35px;
+      margin: 10px;
       cursor: pointer;
+    }
+
+    #resetButton {
+      background-color: #eeeeee;
     }
   </style>
 </head>
+
 
 <body>
 
@@ -38,10 +44,19 @@
 
   <p>現在呼び出し中</p>
 
-  <div id="currentNumber">A000</div>
+  <div id="currentNumber">
+    A000
+  </div>
+
 
   <button id="nextButton">
     次の番号を呼ぶ
+  </button>
+
+  <br>
+
+  <button id="resetButton">
+    全員リセット
   </button>
 
 
@@ -54,33 +69,42 @@
       getDatabase,
       ref,
       onValue,
-      runTransaction
+      runTransaction,
+      set
     }
       from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
 
 
     const firebaseConfig = {
 
-      apiKey: "AIzaSyCGLGkUuNKPWxT9w0mmsLeCulITfBgYRCE",
+      apiKey:
+        "AIzaSyCGLGkUuNKPWxT9w0mmsLeCulITfBgYRCE",
 
-      authDomain: "pancake-ce940.firebaseapp.com",
+      authDomain:
+        "pancake-ce940.firebaseapp.com",
 
       databaseURL:
         "https://pancake-ce940-default-rtdb.asia-southeast1.firebasedatabase.app",
 
-      projectId: "pancake-ce940",
+      projectId:
+        "pancake-ce940",
 
-      storageBucket: "pancake-ce940.firebasestorage.app",
+      storageBucket:
+        "pancake-ce940.firebasestorage.app",
 
-      messagingSenderId: "953995426233",
+      messagingSenderId:
+        "953995426233",
 
-      appId: "1:953995426233:web:66d61ae6990de43c9b5e68"
+      appId:
+        "1:953995426233:web:66d61ae6990de43c9b5e68"
     };
 
 
-    const app = initializeApp(firebaseConfig);
+    const app =
+      initializeApp(firebaseConfig);
 
-    const database = getDatabase(app);
+    const database =
+      getDatabase(app);
 
 
     const currentDisplay =
@@ -89,54 +113,153 @@
     const nextButton =
       document.getElementById("nextButton");
 
+    const resetButton =
+      document.getElementById("resetButton");
+
 
     const currentRef =
       ref(database, "currentNumber");
 
+    const counterRef =
+      ref(database, "ticketCounter");
 
-    // 現在呼び出し中の番号をリアルタイム表示
-    onValue(currentRef, (snapshot) => {
-
-      const number =
-        snapshot.val() || 0;
-
-      currentDisplay.textContent =
-        "A" + String(number).padStart(3, "0");
-
-    });
+    const sessionRef =
+      ref(database, "sessionId");
 
 
-    // 次の番号を呼ぶ
-    nextButton.addEventListener("click", async () => {
+    // ==========================================
+    // 現在呼び出し中の番号を表示
+    // ==========================================
 
-      nextButton.disabled = true;
+    onValue(
+      currentRef,
+      (snapshot) => {
 
-      try {
+        const number =
+          snapshot.val() || 0;
 
-        await runTransaction(
-          currentRef,
-          (currentNumber) => {
-
-            if (currentNumber === null) {
-              return 1;
-            }
-
-            return currentNumber + 1;
-
-          }
-        );
-
-      } catch (error) {
-
-        console.error(error);
-
-        alert("番号の更新に失敗しました");
+        currentDisplay.textContent =
+          "A" +
+          String(number).padStart(3, "0");
 
       }
+    );
 
-      nextButton.disabled = false;
 
-    });
+    // ==========================================
+    // 次の番号を呼ぶ
+    // ==========================================
+
+    nextButton.addEventListener(
+      "click",
+      async () => {
+
+        nextButton.disabled = true;
+
+        try {
+
+          await runTransaction(
+            currentRef,
+            (currentNumber) => {
+
+              if (currentNumber === null) {
+                return 1;
+              }
+
+              return currentNumber + 1;
+
+            }
+          );
+
+        } catch (error) {
+
+          console.error(error);
+
+          alert(
+            "番号の更新に失敗しました"
+          );
+
+        }
+
+        nextButton.disabled = false;
+
+      }
+    );
+
+
+    // ==========================================
+    // 全員リセット
+    // ==========================================
+
+    resetButton.addEventListener(
+      "click",
+      async () => {
+
+        const ok =
+          confirm(
+            "本当に全員の整理券をリセットしますか？"
+          );
+
+
+        if (!ok) {
+          return;
+        }
+
+
+        resetButton.disabled = true;
+
+
+        try {
+
+          // 次に発行する整理券をA001からにする
+          await set(
+            counterRef,
+            0
+          );
+
+
+          // 呼び出し番号をA000に戻す
+          await set(
+            currentRef,
+            0
+          );
+
+
+          // セッション番号を1増やす
+          await runTransaction(
+            sessionRef,
+            (session) => {
+
+              if (session === null) {
+                return 1;
+              }
+
+              return session + 1;
+
+            }
+          );
+
+
+          alert(
+            "整理券をリセットしました"
+          );
+
+
+        } catch (error) {
+
+          console.error(error);
+
+          alert(
+            "リセットに失敗しました"
+          );
+
+        }
+
+
+        resetButton.disabled = false;
+
+      }
+    );
 
   </script>
 
