@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -93,10 +94,11 @@
       ref(database, "currentNumber");
 
 
-    // Firebaseの番号が変わったら画面も変える
+    // 現在呼び出し中の番号をリアルタイム表示
     onValue(currentRef, (snapshot) => {
 
-      const number = snapshot.val() || 0;
+      const number =
+        snapshot.val() || 0;
 
       currentDisplay.textContent =
         "A" + String(number).padStart(3, "0");
@@ -139,4 +141,5 @@
   </script>
 
 </body>
+
 </html>
