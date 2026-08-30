@@ -1,10 +1,8 @@
 <!DOCTYPE html>
 <html lang="ja">
-
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>パンケーキ整理券</title>
 
   <style>
@@ -14,14 +12,8 @@
       padding: 40px 20px;
     }
 
-    h1 {
-      font-size: 32px;
-    }
-
-    .label {
-      font-size: 18px;
-      margin-top: 30px;
-    }
+    h1 { font-size: 32px; }
+    .label { font-size: 18px; margin-top: 30px; }
 
     #currentNumber {
       font-size: 40px;
@@ -35,26 +27,17 @@
       margin: 20px;
     }
 
-    #waitingText {
-      font-size: 26px;
-      margin: 20px;
-    }
-
-    #waitingTime {
-      font-size: 22px;
-      margin: 20px;
-    }
+    #waitingText { font-size: 26px; margin: 20px; }
+    #waitingTime { font-size: 22px; margin: 20px; }
 
     button {
       font-size: 22px;
       padding: 15px 35px;
+      margin: 10px;
       cursor: pointer;
-      margin-top: 15px;
     }
 
-    button:disabled {
-      cursor: default;
-    }
+    button:disabled { opacity: .5; }
   </style>
 </head>
 
@@ -62,487 +45,229 @@
 
   <h1>🥞 パンケーキ整理券</h1>
 
-  <div class="label">
-    現在呼び出し中
-  </div>
+  <div class="label">現在呼び出し中</div>
+  <div id="currentNumber">A000</div>
 
-  <div id="currentNumber">
-    A000
-  </div>
-
-  <div class="label">
-    あなたの番号
-  </div>
-
-  <div id="ticketNumber">
-    ---
-  </div>
+  <div class="label">あなたの番号</div>
+  <div id="ticketNumber">---</div>
 
   <div id="waitingText"></div>
-
   <div id="waitingTime"></div>
 
-  <button id="ticketButton">
-    整理券を発行
-  </button>
+  <button id="ticketButton">整理券を発行</button>
+  <br>
+  <button id="soundButton">🔔 通知音を有効にする</button>
+
 
   <script type="module">
-
-    // ==========================================
-    // Firebase
-    // ==========================================
 
     import { initializeApp }
       from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
 
     import {
-      getDatabase,
-      ref,
-      onValue,
-      runTransaction,
-      get
-    }
-      from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+      getDatabase, ref, onValue, runTransaction, get
+    } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
 
 
     const firebaseConfig = {
-      apiKey:
-        "AIzaSyCGLGkUuNKPWxT9w0mmsLeCulITfBgYRCE",
-
-      authDomain:
-        "pancake-ce940.firebaseapp.com",
-
-      databaseURL:
-        "https://pancake-ce940-default-rtdb.asia-southeast1.firebasedatabase.app",
-
-      projectId:
-        "pancake-ce940",
-
-      storageBucket:
-        "pancake-ce940.firebasestorage.app",
-
-      messagingSenderId:
-        "953995426233",
-
-      appId:
-        "1:953995426233:web:66d61ae6990de43c9b5e68"
+      apiKey: "AIzaSyCGLGkUuNKPWxT9w0mmsLeCulITfBgYRCE",
+      authDomain: "pancake-ce940.firebaseapp.com",
+      databaseURL: "https://pancake-ce940-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "pancake-ce940",
+      storageBucket: "pancake-ce940.firebasestorage.app",
+      messagingSenderId: "953995426233",
+      appId: "1:953995426233:web:66d61ae6990de43c9b5e68"
     };
 
 
-    const app =
-      initializeApp(firebaseConfig);
+    const db = getDatabase(initializeApp(firebaseConfig));
 
-    const database =
-      getDatabase(app);
+    const currentRef = ref(db, "currentNumber");
+    const counterRef = ref(db, "ticketCounter");
+    const sessionRef = ref(db, "sessionId");
 
+    const currentDisplay = document.getElementById("currentNumber");
+    const ticketDisplay = document.getElementById("ticketNumber");
+    const waitingText = document.getElementById("waitingText");
+    const waitingTime = document.getElementById("waitingTime");
+    const ticketButton = document.getElementById("ticketButton");
+    const soundButton = document.getElementById("soundButton");
 
-    // ==========================================
-    // HTML要素
-    // ==========================================
+    let current = 0;
+    let myNumber = null;
+    let sessionId = 0;
+    let audioCtx = null;
+    let soundPlayed = false;
 
-    const button =
-      document.getElementById("ticketButton");
-
-    const ticketDisplay =
-      document.getElementById("ticketNumber");
-
-    const currentDisplay =
-      document.getElementById("currentNumber");
-
-    const waitingText =
-      document.getElementById("waitingText");
-
-    const waitingTime =
-      document.getElementById("waitingTime");
+    const format = n =>
+      "A" + String(n).padStart(3, "0");
 
 
-    // ==========================================
-    // Firebase参照
-    // ==========================================
+    // 音を鳴らす
+    function beep() {
+      if (!audioCtx) return;
 
-    const currentRef =
-      ref(database, "currentNumber");
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
 
-    const counterRef =
-      ref(database, "ticketCounter");
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
 
-    const sessionRef =
-      ref(database, "sessionId");
+      osc.frequency.value = 880;
+      gain.gain.value = .3;
 
-
-    // ==========================================
-    // 状態
-    // ==========================================
-
-    let currentCallNumber = 0;
-
-    let myTicketNumber = null;
-
-    let currentSessionId = 0;
-
-    const minutesPerGroup = 3;
+      osc.start();
+      osc.stop(audioCtx.currentTime + .8);
+    }
 
 
-    // ==========================================
-    // 初期化
-    // ==========================================
-
-    async function initialize() {
-
-      // Firebaseの現在のsessionIdを取得
-      const sessionSnapshot =
-        await get(sessionRef);
-
-      currentSessionId =
-        sessionSnapshot.val() || 0;
-
-
-      // ------------------------------------------
-      // スマホに保存された整理券を確認
-      // ------------------------------------------
-
-      const savedData =
-        localStorage.getItem(
-          "pancakeTicket"
-        );
-
-
-      if (savedData) {
-
-        try {
-
-          const data =
-            JSON.parse(savedData);
-
-
-          // 今のセッションと同じなら整理券は有効
-          if (
-            data.sessionId ===
-            currentSessionId
-          ) {
-
-            myTicketNumber =
-              data.number;
-
-
-            ticketDisplay.textContent =
-              "A" +
-              String(
-                myTicketNumber
-              ).padStart(3, "0");
-
-
-            button.textContent =
-              "整理券は発行済みです";
-
-
-            button.disabled = true;
-
-          }
-
-          // セッションが違えば古い整理券
-          else {
-
-            localStorage.removeItem(
-              "pancakeTicket"
-            );
-
-          }
-
-        } catch (error) {
-
-          // 保存データが壊れていた場合
-          localStorage.removeItem(
-            "pancakeTicket"
-          );
-
+    // 通知音を有効化
+    soundButton.addEventListener("click", async () => {
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         }
 
+        await audioCtx.resume();
+
+        // テスト音
+        beep();
+
+        soundButton.textContent = "🔔 通知音 ON";
+        soundButton.disabled = true;
+
+      } catch (error) {
+        console.error(error);
+        alert("通知音を有効にできませんでした");
+      }
+    });
+
+
+    function updateWaiting() {
+      if (myNumber === null) {
+        waitingText.textContent = "";
+        waitingTime.textContent = "";
+        return;
       }
 
-      updateWaitingInfo();
+      const difference = myNumber - current;
 
+      if (difference > 0) {
+        const ahead = Math.max(difference - 1, 0);
+
+        waitingText.textContent =
+          ahead ? `前に${ahead}組お待ちです` : "次にお呼びします";
+
+        waitingTime.textContent =
+          `待ち時間の目安：約${difference * 3}分`;
+
+      } else if (difference === 0) {
+        waitingText.textContent = "あなたの順番です！";
+        waitingTime.textContent = "店頭までお越しください";
+
+        if (!soundPlayed && audioCtx) {
+          beep();
+          soundPlayed = true;
+        }
+
+      } else {
+        waitingText.textContent = "呼び出し済みです";
+        waitingTime.textContent = "";
+      }
     }
+
+
+    // 最初の読み込み
+    async function initialize() {
+      sessionId = (await get(sessionRef)).val() || 0;
+
+      const saved = localStorage.getItem("pancakeTicket");
+
+      if (saved) {
+        try {
+          const data = JSON.parse(saved);
+
+          if (data.sessionId === sessionId) {
+            myNumber = data.number;
+            ticketDisplay.textContent = format(myNumber);
+            ticketButton.textContent = "整理券は発行済みです";
+            ticketButton.disabled = true;
+          } else {
+            localStorage.removeItem("pancakeTicket");
+          }
+        } catch {
+          localStorage.removeItem("pancakeTicket");
+        }
+      }
+
+      updateWaiting();
+
+
+      // 店員が全員リセットしたことを検知
+      onValue(sessionRef, snapshot => {
+        const newSession = snapshot.val() || 0;
+
+        if (newSession === sessionId) return;
+
+        sessionId = newSession;
+        myNumber = null;
+        soundPlayed = false;
+
+        localStorage.removeItem("pancakeTicket");
+
+        ticketDisplay.textContent = "---";
+        waitingText.textContent = "";
+        waitingTime.textContent = "";
+        ticketButton.textContent = "整理券を発行";
+        ticketButton.disabled = false;
+      });
+    }
+
+
+    // 店員側の呼び出しをリアルタイム監視
+    onValue(currentRef, snapshot => {
+      current = snapshot.val() || 0;
+      currentDisplay.textContent = format(current);
+      updateWaiting();
+    });
+
+
+    // 整理券発行
+    ticketButton.addEventListener("click", async () => {
+      ticketButton.disabled = true;
+
+      try {
+        const result = await runTransaction(
+          counterRef,
+          n => (n || 0) + 1
+        );
+
+        myNumber = result.snapshot.val();
+        soundPlayed = false;
+
+        ticketDisplay.textContent = format(myNumber);
+        ticketButton.textContent = "整理券は発行済みです";
+
+        localStorage.setItem(
+          "pancakeTicket",
+          JSON.stringify({
+            number: myNumber,
+            sessionId
+          })
+        );
+
+        updateWaiting();
+
+      } catch (error) {
+        console.error(error);
+        alert("整理券の発行に失敗しました");
+        ticketButton.disabled = false;
+      }
+    });
 
 
     initialize();
 
-
-    // ==========================================
-    // 現在呼び出し番号をリアルタイム監視
-    // ==========================================
-
-    onValue(
-      currentRef,
-      (snapshot) => {
-
-        currentCallNumber =
-          snapshot.val() || 0;
-
-
-        currentDisplay.textContent =
-          "A" +
-          String(
-            currentCallNumber
-          ).padStart(3, "0");
-
-
-        updateWaitingInfo();
-
-      }
-    );
-
-
-    // ==========================================
-    // sessionIdをリアルタイム監視
-    // ==========================================
-
-    onValue(
-      sessionRef,
-      (snapshot) => {
-
-        const newSessionId =
-          snapshot.val() || 0;
-
-
-        // 店員がリセットした場合
-        if (
-          newSessionId !==
-          currentSessionId
-        ) {
-
-          currentSessionId =
-            newSessionId;
-
-
-          // 古い整理券を削除
-          localStorage.removeItem(
-            "pancakeTicket"
-          );
-
-
-          myTicketNumber = null;
-
-
-          ticketDisplay.textContent =
-            "---";
-
-
-          waitingText.textContent =
-            "";
-
-
-          waitingTime.textContent =
-            "";
-
-
-          button.textContent =
-            "整理券を発行";
-
-
-          button.disabled = false;
-
-        }
-
-      }
-    );
-
-
-    // ==========================================
-    // 待ち時間表示
-    // ==========================================
-
-    function updateWaitingInfo() {
-
-      // 整理券を持っていない
-      if (myTicketNumber === null) {
-
-        waitingText.textContent = "";
-
-        waitingTime.textContent = "";
-
-        return;
-
-      }
-
-
-      const difference =
-        myTicketNumber -
-        currentCallNumber;
-
-
-      // ------------------------------------------
-      // まだ順番が来ていない
-      // ------------------------------------------
-
-      if (difference > 0) {
-
-        const groupsAhead =
-          Math.max(
-            difference - 1,
-            0
-          );
-
-
-        if (groupsAhead === 0) {
-
-          waitingText.textContent =
-            "次にお呼びします";
-
-        } else {
-
-          waitingText.textContent =
-            "前に" +
-            groupsAhead +
-            "組お待ちです";
-
-        }
-
-
-        const estimatedMinutes =
-          difference *
-          minutesPerGroup;
-
-
-        waitingTime.textContent =
-          "待ち時間の目安：約" +
-          estimatedMinutes +
-          "分";
-
-      }
-
-
-      // ------------------------------------------
-      // 自分の順番
-      // ------------------------------------------
-
-      else if (difference === 0) {
-
-        waitingText.textContent =
-          "あなたの順番です！";
-
-
-        waitingTime.textContent =
-          "店頭までお越しください";
-
-      }
-
-
-      // ------------------------------------------
-      // 呼び出し済み
-      // ------------------------------------------
-
-      else {
-
-        waitingText.textContent =
-          "呼び出し済みです";
-
-
-        waitingTime.textContent = "";
-
-      }
-
-    }
-
-
-    // ==========================================
-    // 整理券発行
-    // ==========================================
-
-    button.addEventListener(
-      "click",
-      async () => {
-
-        button.disabled = true;
-
-
-        try {
-
-          // ticketCounterを安全に+1
-          const result =
-            await runTransaction(
-              counterRef,
-              (currentNumber) => {
-
-                if (
-                  currentNumber === null
-                ) {
-
-                  return 1;
-
-                }
-
-
-                return currentNumber + 1;
-
-              }
-            );
-
-
-          const number =
-            result.snapshot.val();
-
-
-          myTicketNumber =
-            number;
-
-
-          const ticket =
-            "A" +
-            String(
-              number
-            ).padStart(3, "0");
-
-
-          ticketDisplay.textContent =
-            ticket;
-
-
-          // --------------------------------------
-          // スマホに保存
-          // --------------------------------------
-
-          const saveData = {
-            number: number,
-            sessionId: currentSessionId
-          };
-
-
-          localStorage.setItem(
-            "pancakeTicket",
-            JSON.stringify(saveData)
-          );
-
-
-          button.textContent =
-            "整理券は発行済みです";
-
-
-          button.disabled = true;
-
-
-          updateWaitingInfo();
-
-
-        } catch (error) {
-
-          console.error(error);
-
-
-          alert(
-            "整理券の発行に失敗しました"
-          );
-
-
-          button.disabled = false;
-
-        }
-
-      }
-    );
-
   </script>
-
 </body>
-
 </html>

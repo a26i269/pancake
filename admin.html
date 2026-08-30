@@ -1,10 +1,9 @@
+```html
 <!DOCTYPE html>
 <html lang="ja">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
   <title>パンケーキ整理券 管理画面</title>
 
   <style>
@@ -14,9 +13,7 @@
       padding: 50px 20px;
     }
 
-    h1 {
-      font-size: 32px;
-    }
+    h1 { font-size: 32px; }
 
     .label {
       font-size: 18px;
@@ -52,57 +49,27 @@
       opacity: 0.5;
     }
 
-    #resetButton {
-      background-color: #eeeeee;
-    }
+    #resetButton { background: #eee; }
   </style>
 </head>
-
 
 <body>
 
   <h1>🥞 店員用 管理画面</h1>
 
+  <div class="label">現在呼び出し中</div>
+  <div id="currentNumber">A000</div>
 
-  <div class="label">
-    現在呼び出し中
-  </div>
+  <div class="label">現在の最終発行番号</div>
+  <div id="issuedNumber">A000</div>
 
-  <div id="currentNumber">
-    A000
-  </div>
+  <div id="statusText"></div>
 
-
-  <div class="label">
-    現在の最終発行番号
-  </div>
-
-  <div id="issuedNumber">
-    A000
-  </div>
-
-
-  <div id="statusText">
-  </div>
-
-
-  <button id="nextButton">
-    次の番号を呼ぶ
-  </button>
-
+  <button id="nextButton">次の番号を呼ぶ</button>
   <br>
-
-  <button id="resetButton">
-    全員リセット
-  </button>
-
+  <button id="resetButton">全員リセット</button>
 
   <script type="module">
-
-    // ==========================================
-    // Firebase
-    // ==========================================
-
     import { initializeApp }
       from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
 
@@ -113,344 +80,104 @@
       runTransaction,
       get,
       update
-    }
-      from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
-
+    } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
 
     const firebaseConfig = {
-
-      apiKey:
-        "AIzaSyCGLGkUuNKPWxT9w0mmsLeCulITfBgYRCE",
-
-      authDomain:
-        "pancake-ce940.firebaseapp.com",
-
-      databaseURL:
-        "https://pancake-ce940-default-rtdb.asia-southeast1.firebasedatabase.app",
-
-      projectId:
-        "pancake-ce940",
-
-      storageBucket:
-        "pancake-ce940.firebasestorage.app",
-
-      messagingSenderId:
-        "953995426233",
-
-      appId:
-        "1:953995426233:web:66d61ae6990de43c9b5e68"
+      apiKey: "AIzaSyCGLGkUuNKPWxT9w0mmsLeCulITfBgYRCE",
+      authDomain: "pancake-ce940.firebaseapp.com",
+      databaseURL: "https://pancake-ce940-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "pancake-ce940",
+      storageBucket: "pancake-ce940.firebasestorage.app",
+      messagingSenderId: "953995426233",
+      appId: "1:953995426233:web:66d61ae6990de43c9b5e68"
     };
 
+    const db = getDatabase(initializeApp(firebaseConfig));
 
-    const app =
-      initializeApp(firebaseConfig);
+    const currentRef = ref(db, "currentNumber");
+    const counterRef = ref(db, "ticketCounter");
+    const sessionRef = ref(db, "sessionId");
 
-    const database =
-      getDatabase(app);
+    const currentDisplay = document.getElementById("currentNumber");
+    const issuedDisplay = document.getElementById("issuedNumber");
+    const statusText = document.getElementById("statusText");
+    const nextButton = document.getElementById("nextButton");
+    const resetButton = document.getElementById("resetButton");
 
+    let current = 0;
+    let counter = 0;
 
-    // ==========================================
-    // HTML要素
-    // ==========================================
-
-    const currentDisplay =
-      document.getElementById("currentNumber");
-
-    const issuedDisplay =
-      document.getElementById("issuedNumber");
-
-    const statusText =
-      document.getElementById("statusText");
-
-    const nextButton =
-      document.getElementById("nextButton");
-
-    const resetButton =
-      document.getElementById("resetButton");
-
-
-    // ==========================================
-    // Firebase参照
-    // ==========================================
-
-    const currentRef =
-      ref(database, "currentNumber");
-
-    const counterRef =
-      ref(database, "ticketCounter");
-
-    const sessionRef =
-      ref(database, "sessionId");
-
-    const rootRef =
-      ref(database);
-
-
-    // ==========================================
-    // 現在の状態
-    // ==========================================
-
-    let currentNumber = 0;
-
-    let ticketCounter = 0;
-
-
-    // ==========================================
-    // A001形式に変換する関数
-    // ==========================================
-
-    function formatTicket(number) {
-
-      return (
-        "A" +
-        String(number).padStart(3, "0")
-      );
-
-    }
-
-
-    // ==========================================
-    // ボタン・状態表示を更新
-    // ==========================================
+    const format = n =>
+      "A" + String(n).padStart(3, "0");
 
     function updateStatus() {
-
-      // 発行された整理券がない
-      if (ticketCounter === 0) {
-
-        statusText.textContent =
-          "現在、待っているお客様はいません";
-
+      if (counter === 0) {
+        statusText.textContent = "現在、待っているお客様はいません";
         nextButton.disabled = true;
-
-        return;
-
-      }
-
-
-      // 全員呼び出し済み
-      if (currentNumber >= ticketCounter) {
-
-        statusText.textContent =
-          "発行済みの整理券はすべて呼び出しました";
-
+      } else if (current >= counter) {
+        statusText.textContent = "発行済みの整理券はすべて呼び出しました";
         nextButton.disabled = true;
-
-        return;
-
+      } else {
+        statusText.textContent = `呼び出し待ち：${counter - current}組`;
+        nextButton.disabled = false;
       }
-
-
-      // 呼び出せる人がいる
-      const waiting =
-        ticketCounter - currentNumber;
-
-
-      statusText.textContent =
-        "呼び出し待ち：" +
-        waiting +
-        "組";
-
-
-      nextButton.disabled = false;
-
     }
 
+    onValue(currentRef, snapshot => {
+      current = snapshot.val() || 0;
+      currentDisplay.textContent = format(current);
+      updateStatus();
+    });
 
-    // ==========================================
-    // 現在呼び出し番号を監視
-    // ==========================================
+    onValue(counterRef, snapshot => {
+      counter = snapshot.val() || 0;
+      issuedDisplay.textContent = format(counter);
+      updateStatus();
+    });
 
-    onValue(
-      currentRef,
-      (snapshot) => {
+    nextButton.addEventListener("click", async () => {
+      nextButton.disabled = true;
 
-        currentNumber =
-          snapshot.val() || 0;
+      try {
+        const latest = (await get(counterRef)).val() || 0;
 
-
-        currentDisplay.textContent =
-          formatTicket(currentNumber);
-
-
-        updateStatus();
-
+        await runTransaction(
+          currentRef,
+          n => (n || 0) >= latest ? (n || 0) : (n || 0) + 1
+        );
+      } catch (error) {
+        console.error(error);
+        alert("番号の更新に失敗しました");
       }
-    );
 
+      updateStatus();
+    });
 
-    // ==========================================
-    // 発行済み番号を監視
-    // ==========================================
+    resetButton.addEventListener("click", async () => {
+      if (!confirm("本当に全員の整理券をリセットしますか？")) return;
 
-    onValue(
-      counterRef,
-      (snapshot) => {
+      resetButton.disabled = true;
+      nextButton.disabled = true;
 
-        ticketCounter =
-          snapshot.val() || 0;
+      try {
+        const session = (await get(sessionRef)).val() || 0;
 
+        await update(ref(db), {
+          ticketCounter: 0,
+          currentNumber: 0,
+          sessionId: session + 1
+        });
 
-        issuedDisplay.textContent =
-          formatTicket(ticketCounter);
-
-
-        updateStatus();
-
+        alert("整理券をリセットしました");
+      } catch (error) {
+        console.error(error);
+        alert("リセットに失敗しました");
       }
-    );
 
-
-    // ==========================================
-    // 次の番号を呼ぶ
-    // ==========================================
-
-    nextButton.addEventListener(
-      "click",
-      async () => {
-
-        nextButton.disabled = true;
-
-
-        try {
-
-          // 最新の発行番号をFirebaseから取得
-          const counterSnapshot =
-            await get(counterRef);
-
-
-          const latestCounter =
-            counterSnapshot.val() || 0;
-
-
-          // currentNumberを安全に更新
-          await runTransaction(
-            currentRef,
-            (current) => {
-
-              const number =
-                current || 0;
-
-
-              // 発行済み番号まで到達していたら
-              // それ以上増やさない
-              if (
-                number >=
-                latestCounter
-              ) {
-
-                return number;
-
-              }
-
-
-              return number + 1;
-
-            }
-          );
-
-
-        } catch (error) {
-
-          console.error(error);
-
-
-          alert(
-            "番号の更新に失敗しました"
-          );
-
-        }
-
-
-        updateStatus();
-
-      }
-    );
-
-
-    // ==========================================
-    // 全員リセット
-    // ==========================================
-
-    resetButton.addEventListener(
-      "click",
-      async () => {
-
-        const ok =
-          confirm(
-            "本当に全員の整理券をリセットしますか？"
-          );
-
-
-        if (!ok) {
-          return;
-        }
-
-
-        resetButton.disabled = true;
-
-        nextButton.disabled = true;
-
-
-        try {
-
-          // 現在のsessionIdを取得
-          const sessionSnapshot =
-            await get(sessionRef);
-
-
-          const currentSession =
-            sessionSnapshot.val() || 0;
-
-
-          // --------------------------------------
-          // まとめて更新
-          // --------------------------------------
-
-          await update(
-            rootRef,
-            {
-
-              // 次の整理券をA001からにする
-              ticketCounter: 0,
-
-              // 呼び出し番号をA000へ
-              currentNumber: 0,
-
-              // 前の整理券を無効にする
-              sessionId:
-                currentSession + 1
-
-            }
-          );
-
-
-          alert(
-            "整理券をリセットしました"
-          );
-
-
-        } catch (error) {
-
-          console.error(error);
-
-
-          alert(
-            "リセットに失敗しました"
-          );
-
-        }
-
-
-        resetButton.disabled = false;
-
-        updateStatus();
-
-      }
-    );
-
+      resetButton.disabled = false;
+      updateStatus();
+    });
   </script>
 
 </body>
-
 </html>
