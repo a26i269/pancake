@@ -60,7 +60,6 @@
 
 
   <script type="module">
-
     import { initializeApp }
       from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
 
@@ -103,7 +102,7 @@
       "A" + String(n).padStart(3, "0");
 
 
-    // 音を鳴らす
+    // 通知音
     function beep() {
       if (!audioCtx) return;
 
@@ -122,16 +121,17 @@
 
 
     // 通知音を有効化
+    // このボタンを押した時点では音を鳴らさない
     soundButton.addEventListener("click", async () => {
       try {
         if (!audioCtx) {
-          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          audioCtx = new (
+            window.AudioContext ||
+            window.webkitAudioContext
+          )();
         }
 
         await audioCtx.resume();
-
-        // テスト音
-        beep();
 
         soundButton.textContent = "🔔 通知音 ON";
         soundButton.disabled = true;
@@ -156,7 +156,9 @@
         const ahead = Math.max(difference - 1, 0);
 
         waitingText.textContent =
-          ahead ? `前に${ahead}組お待ちです` : "次にお呼びします";
+          ahead
+            ? `前に${ahead}組お待ちです`
+            : "次にお呼びします";
 
         waitingTime.textContent =
           `待ち時間の目安：約${difference * 3}分`;
@@ -165,6 +167,7 @@
         waitingText.textContent = "あなたの順番です！";
         waitingTime.textContent = "店頭までお越しください";
 
+        // 店員がこの番号を呼んだときだけ鳴る
         if (!soundPlayed && audioCtx) {
           beep();
           soundPlayed = true;
@@ -177,7 +180,7 @@
     }
 
 
-    // 最初の読み込み
+    // 初期化
     async function initialize() {
       sessionId = (await get(sessionRef)).val() || 0;
 
@@ -195,6 +198,7 @@
           } else {
             localStorage.removeItem("pancakeTicket");
           }
+
         } catch {
           localStorage.removeItem("pancakeTicket");
         }
@@ -203,7 +207,7 @@
       updateWaiting();
 
 
-      // 店員が全員リセットしたことを検知
+      // 店員側の全員リセットを監視
       onValue(sessionRef, snapshot => {
         const newSession = snapshot.val() || 0;
 
@@ -218,13 +222,14 @@
         ticketDisplay.textContent = "---";
         waitingText.textContent = "";
         waitingTime.textContent = "";
+
         ticketButton.textContent = "整理券を発行";
         ticketButton.disabled = false;
       });
     }
 
 
-    // 店員側の呼び出しをリアルタイム監視
+    // 店員側の呼び出しを監視
     onValue(currentRef, snapshot => {
       current = snapshot.val() || 0;
       currentDisplay.textContent = format(current);
