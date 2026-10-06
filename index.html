@@ -104,20 +104,29 @@
 
     // 通知音
     function beep() {
-      if (!audioCtx) return;
+        if (!audioCtx) return;
 
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
+        const gain = audioCtx.createGain();
+        gain.connect(audioCtx.destination);
 
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
+        const osc1 = audioCtx.createOscillator();
+        osc1.connect(gain);
+        osc1.frequency.value = 880;
 
-      osc.frequency.value = 880;
-      gain.gain.value = .3;
+        const osc2 = audioCtx.createOscillator();
+        osc2.connect(gain);
+        osc2.frequency.value = 660;
 
-      osc.start();
-      osc.stop(audioCtx.currentTime + .8);
-    }
+        const now = audioCtx.currentTime;
+
+        gain.gain.setValueAtTime(0.3, now);
+
+        osc1.start(now);
+        osc1.stop(now + 0.4);
+
+        osc2.start(now + 0.35);
+        osc2.stop(now + 0.8);
+      }
 
 
     // 通知音を有効化
