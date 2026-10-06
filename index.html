@@ -107,6 +107,7 @@
         if (!audioCtx) return;
 
         const now = audioCtx.currentTime;
+        const gain = audioCtx.createGain();
 
         const osc1 = audioCtx.createOscillator();
         osc1.connect(gain);
