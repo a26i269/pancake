@@ -106,27 +106,21 @@
     function beep() {
         if (!audioCtx) return;
 
+        const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
+
+        osc.connect(gain);
         gain.connect(audioCtx.destination);
-
-        const osc1 = audioCtx.createOscillator();
-        osc1.connect(gain);
-        osc1.frequency.value = 880;
-
-        const osc2 = audioCtx.createOscillator();
-        osc2.connect(gain);
-        osc2.frequency.value = 660;
 
         const now = audioCtx.currentTime;
 
+        osc.frequency.setValueAtTime(880, now);
+        osc.frequency.setValueAtTime(660, now + 0.5);
+
         gain.gain.setValueAtTime(0.3, now);
-        gain.gain.setValueAtTime(0.3, now + 1.0);
 
-        osc1.start(now);
-        osc1.stop(now + 1.0);
-
-        osc2.start(now + 1.0);
-        osc2.stop(now + 2.0);
+        osc.start(now);
+        osc.stop(now + 1.0);
       }
 
 
