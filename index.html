@@ -1,5 +1,7 @@
+```html
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -12,8 +14,14 @@
       padding: 40px 20px;
     }
 
-    h1 { font-size: 32px; }
-    .label { font-size: 18px; margin-top: 30px; }
+    h1 {
+      font-size: 32px;
+    }
+
+    .label {
+      font-size: 18px;
+      margin-top: 30px;
+    }
 
     #currentNumber {
       font-size: 40px;
@@ -27,8 +35,15 @@
       margin: 20px;
     }
 
-    #waitingText { font-size: 26px; margin: 20px; }
-    #waitingTime { font-size: 22px; margin: 20px; }
+    #waitingText {
+      font-size: 26px;
+      margin: 20px;
+    }
+
+    #waitingTime {
+      font-size: 22px;
+      margin: 20px;
+    }
 
     button {
       font-size: 22px;
@@ -37,12 +52,13 @@
       cursor: pointer;
     }
 
-    button:disabled { opacity: .5; }
+    button:disabled {
+      opacity: .5;
+    }
   </style>
 </head>
 
 <body>
-
   <h1>🥞 パンケーキ整理券</h1>
 
   <div class="label">現在呼び出し中</div>
@@ -58,7 +74,6 @@
   <br>
   <button id="soundButton">🔔 通知音を有効にする</button>
 
-
   <script type="module">
     import { initializeApp }
       from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
@@ -66,7 +81,6 @@
     import {
       getDatabase, ref, onValue, runTransaction, get
     } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
-
 
     const firebaseConfig = {
       apiKey: "AIzaSyCGLGkUuNKPWxT9w0mmsLeCulITfBgYRCE",
@@ -77,7 +91,6 @@
       messagingSenderId: "953995426233",
       appId: "1:953995426233:web:66d61ae6990de43c9b5e68"
     };
-
 
     const db = getDatabase(initializeApp(firebaseConfig));
 
@@ -101,34 +114,44 @@
     const format = n =>
       "A" + String(n).padStart(3, "0");
 
-
     // 通知音
     function beep() {
-        if (!audioCtx) return;
+      if (!audioCtx) return;
 
-        const now = audioCtx.currentTime;
+      const now = audioCtx.currentTime;
 
+      function playNote(freq, start, duration, volume) {
+        const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
+
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, start);
+
+        gain.gain.setValueAtTime(0.001, start);
+        gain.gain.exponentialRampToValueAtTime(
+          volume, start + 0.04
+        );
+        gain.gain.setValueAtTime(
+          volume, start + duration * 0.5
+        );
+        gain.gain.exponentialRampToValueAtTime(
+          0.001, start + duration
+        );
+
+        osc.connect(gain);
         gain.connect(audioCtx.destination);
-        gain.gain.setValueAtTime(0.3, now);
 
-        const osc1 = audioCtx.createOscillator();
-        osc1.connect(gain);
-        osc1.frequency.value = 880;
-
-        const osc2 = audioCtx.createOscillator();
-        osc2.connect(gain);
-        osc2.frequency.value = 660;
-
-        osc1.start(now);
-        osc1.stop(now + 0.6);
-
-        osc2.start(now + 0.7);
-        osc2.stop(now + 1.4);
+        osc.start(start);
+        osc.stop(start + duration + 0.02);
       }
 
+      playNote(784, now, 0.45, 0.20);
+      playNote(988, now + 0.18, 0.50, 0.17);
+      playNote(1175, now + 0.42, 0.75, 0.15);
+      playNote(1568, now + 0.48, 0.85, 0.07);
+    }
+
     // 通知音を有効化
-    // このボタンを押した時点では音を鳴らさない
     soundButton.addEventListener("click", async () => {
       try {
         if (!audioCtx) {
@@ -142,13 +165,11 @@
 
         soundButton.textContent = "🔔 通知音 ON";
         soundButton.disabled = true;
-
       } catch (error) {
         console.error(error);
         alert("通知音を有効にできませんでした");
       }
     });
-
 
     function updateWaiting() {
       if (myNumber === null) {
@@ -174,7 +195,6 @@
         waitingText.textContent = "あなたの順番です！";
         waitingTime.textContent = "店頭までお越しください";
 
-        // 店員がこの番号を呼んだときだけ鳴る
         if (!soundPlayed && audioCtx) {
           beep();
           soundPlayed = true;
@@ -185,7 +205,6 @@
         waitingTime.textContent = "";
       }
     }
-
 
     // 初期化
     async function initialize() {
@@ -205,7 +224,6 @@
           } else {
             localStorage.removeItem("pancakeTicket");
           }
-
         } catch {
           localStorage.removeItem("pancakeTicket");
         }
@@ -213,8 +231,7 @@
 
       updateWaiting();
 
-
-      // 店員側の全員リセットを監視
+      // 全員リセットを監視
       onValue(sessionRef, snapshot => {
         const newSession = snapshot.val() || 0;
 
@@ -235,16 +252,14 @@
       });
     }
 
-
-    // 店員側の呼び出しを監視
+    // 呼び出しを監視
     onValue(currentRef, snapshot => {
       current = snapshot.val() || 0;
       currentDisplay.textContent = format(current);
       updateWaiting();
     });
 
-
-    // 整理券発行
+    // 整理券を発行
     ticketButton.addEventListener("click", async () => {
       ticketButton.disabled = true;
 
@@ -253,6 +268,10 @@
           counterRef,
           n => (n || 0) + 1
         );
+
+        if (!result.committed) {
+          throw new Error("整理券を発行できませんでした");
+        }
 
         myNumber = result.snapshot.val();
         soundPlayed = false;
@@ -277,9 +296,8 @@
       }
     });
 
-
     initialize();
-
   </script>
 </body>
+
 </html>
